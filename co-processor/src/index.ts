@@ -1,6 +1,8 @@
 import createClient from "openapi-fetch";
 // @ts-ignore
 import { components, paths } from "../schema";
+import { initialize } from "./analyzer";
+import { createEncoder } from "./encoder";
 
 type AdvanceRequestData = components["schemas"]["Advance"];
 type InspectRequestData = components["schemas"]["Inspect"];
@@ -14,10 +16,34 @@ type AdvanceRequestHandler = (
 const rollupServer = process.env.ROLLUP_HTTP_SERVER_URL;
 console.log("HTTP rollup_server url is " + rollupServer);
 
+// Initialize NLP processor instance
+const analyzer = await initialize();
+const encoder = createEncoder();
+
 const handleAdvance: AdvanceRequestHandler = async (data) => {
     console.log("Received advance request data " + JSON.stringify(data));
-    return "accept";
-};  
+
+    try {
+        // Convert hex payload to text
+        const userInput = Buffer.from(data.payload.slice(2), "hex").toString(
+            "utf8"
+        );
+        console.log("Decoded user input:", userInput);
+
+        // Analyze with NLP
+        const analysis = await analyzer.analyzeMessage(userInput);
+        console.log("NLP Analysis Result:", JSON.stringify(analysis, null, 2));
+
+        // Encode for smart contract
+        const encodedAction = encoder.encodeAction(analysis);
+        console.log("Encoded Action:", encodedAction);
+
+        return "accept";
+    } catch (error) {
+        console.error("Error processing request:", error);
+        return "reject";
+    }
+};
 
 const handleInspect: InspectRequestHandler = async (data) => {
     console.log("Received inspect request data " + JSON.stringify(data));
