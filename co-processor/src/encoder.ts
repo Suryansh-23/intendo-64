@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, isAddress, parseUnits } from "viem";
+import { encodeAbiParameters, getAddress, Hex, isAddress, parseUnits } from "viem";
 import { DeFiAction } from "./analyzer";
 
 // Match Solidity struct exactly
@@ -48,7 +48,7 @@ export class ActionEncoder {
         return slippage;
     }
 
-    public encodeAction(action: DeFiAction): string {
+    public encodeAction(action: DeFiAction): Hex {
         try {
             // Validate and format parameters
             const params = {

@@ -3,6 +3,7 @@ import createClient from "openapi-fetch";
 import { components, paths } from "../schema";
 import { initialize } from "./analyzer";
 import { createEncoder } from "./encoder";
+import { Hex } from "viem";
 
 type AdvanceRequestData = components["schemas"]["Advance"];
 type InspectRequestData = components["schemas"]["Inspect"];
@@ -19,6 +20,29 @@ console.log("HTTP rollup_server url is " + rollupServer);
 // Initialize NLP processor instance
 const analyzer = await initialize();
 const encoder = createEncoder();
+
+async function emit_notice(data: Hex) {
+    try {
+        const noticePayload = { payload: data };
+        const response = await fetch(`${rollupServer}/notice`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(noticePayload),
+        });
+
+        if (response.status === 201) {
+            console.log(`Notice emitted successfully: "${data}"`);
+        } else {
+            console.error(
+                `Failed to emit notice. Status code: ${response.status}`
+            );
+        }
+    } catch (error) {
+        console.error(`Error emitting notice:`, error);
+    }
+}
 
 const handleAdvance: AdvanceRequestHandler = async (data) => {
     console.log("Received advance request data " + JSON.stringify(data));
@@ -37,6 +61,10 @@ const handleAdvance: AdvanceRequestHandler = async (data) => {
         // Encode for smart contract
         const encodedAction = encoder.encodeAction(analysis);
         console.log("Encoded Action:", encodedAction);
+
+        // Emit notice
+        await emit_notice(encodedAction);
+        console.log("Notice emitted successfully");
 
         return "accept";
     } catch (error) {
