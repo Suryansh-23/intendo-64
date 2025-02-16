@@ -1,21 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 1920 1080">
     <defs>
         <g id="cloud1">
-            <path fill="#F7F5EA" fill-opacity="0.3"
-                d="M10,50 C10,30 30,30 40,30 C50,10 90,10 100,30 C110,10 150,10 160,30 C170,30 190,30 190,50 C190,70 10,70 10,50z" />
+            <polygon style="fill:#F7F5EA;fill-opacity:0.8;" points="150,150 270,150 270,105 330,105 330,60 375,60 375,15 480,15 480,60 600,60 600,105 690,105 690,150 780,150 780,195 930,195 930,240 120,240 120,195 150,195"/>
         </g>
         <g id="cloud2">
-            <path fill="#F7F5EA" fill-opacity="0.3"
-                d="M20,40 C20,20 40,20 50,20 C60,0 100,0 110,20 C120,0 160,0 170,20 C180,20 180,40 180,40 C180,60 20,60 20,40z" />
+            <polygon style="fill:#F7F5EA;fill-opacity:0.8;" points="75,120 180,120 180,75 240,75 240,30 300,30 300,75 360,75 360,120 450,120 450,165 45,165 45,120"/>
         </g>
         <g id="cloud3">
-            <path fill="#F7F5EA" fill-opacity="0.3"
-                d="M30,30 C30,10 50,10 60,10 C70,0 90,0 100,10 C110,0 130,0 140,10 C150,10 150,30 150,30 C150,50 30,50 30,30z" />
+            <polygon style="fill:#F7F5EA;fill-opacity:0.8;" points="105,90 210,90 210,45 270,45 270,0 330,0 330,45 390,45 390,90 480,90 480,135 75,135 75,90"/>
         </g>
     </defs>
-
-    <!-- Preview instances of the clouds -->
-    <use href="#cloud1" x="0" y="0" />
-    <use href="#cloud2" x="0" y="70" />
-    <use href="#cloud3" x="0" y="140" />
+    
+    <use href="#cloud1" x="0" y="0"/>
+    <use href="#cloud2" x="100" y="50"/>
+    <use href="#cloud3" x="200" y="100"/>
 </svg>

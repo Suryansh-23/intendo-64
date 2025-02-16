@@ -91,7 +91,7 @@
 .cloud {
     position: absolute;
     width: 300px;
-    height: 150px;
+    height: 200px;
     opacity: 0.6;
     pointer-events: none;
     background-color: #f7f5ea;
@@ -102,18 +102,53 @@
     mask-repeat: no-repeat;
     -webkit-mask-repeat: no-repeat;
     animation: float 30s linear infinite;
+    z-index: 1;
+    will-change: transform;
 }
 
-.cloud:nth-child(2) {
-    mask-image: url("/clouds.svg#cloud2");
-    -webkit-mask-image: url("/clouds.svg#cloud2");
-    animation-duration: 25s;
+.cloud img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
 }
 
-.cloud:nth-child(3) {
-    mask-image: url("/clouds.svg#cloud3");
-    -webkit-mask-image: url("/clouds.svg#cloud3");
-    animation-duration: 35s;
+.cloud-1 {
+    top: 15%;
+    animation: floatCloud 45s linear infinite;
+}
+
+.cloud-2 {
+    top: 40%;
+    animation: floatCloud 35s linear infinite;
+    animation-delay: -15s;
+}
+
+.cloud-3 {
+    top: 65%;
+    animation: floatCloud 40s linear infinite;
+    animation-delay: -25s;
+}
+
+.cloud-4 {
+    top: 25%;
+    animation: floatCloud 38s linear infinite;
+    animation-delay: -5s;
+}
+
+.cloud-5 {
+    top: 50%;
+    animation: floatCloud 42s linear infinite;
+    animation-delay: -30s;
+}
+
+@keyframes floatCloud {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100vw);
+    }
 }
 
 @keyframes float {
@@ -122,6 +157,23 @@
     }
     to {
         transform: translateX(100vw);
+    }
+}
+
+@keyframes moveCloud {
+    0% {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(100vw);
+        opacity: 0;
     }
 }
 
