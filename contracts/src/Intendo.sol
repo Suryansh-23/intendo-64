@@ -46,6 +46,13 @@ contract Intendo is CoprocessorAdapter {
         string reason
     );
 
+    event TransferExecuted(
+        address indexed token,
+        address indexed from,
+        address indexed to,
+        uint256 amount
+    );
+
     IProtocolSolver public immutable uniswapSolver;
     IProtocolSolver public immutable aaveSolver;
 
@@ -98,8 +105,17 @@ contract Intendo is CoprocessorAdapter {
         } else if (action.protocol == 2) {
             // AAVE
             return executeAaveAction(action);
+        } else if (action.protocol == 0) {
+            // GENERIC
+            if (action.actionType == 7) { // TRANSFER
+                return executeTransfer(
+                    action.params.tokenIn,
+                    action.params.amount,
+                    action.params.recipient
+                );
+            }
         }
-        revert("Unsupported protocol");
+        revert("Unsupported protocol or action");
     }
 
     function executeUniswapAction(Action memory action) private returns (bool) {
@@ -153,6 +169,47 @@ contract Intendo is CoprocessorAdapter {
         }
         revert("Unsupported action for Aave");
     }
+
+    function executeTransfer(
+        address token,
+        uint256 amount,
+        address recipient
+    ) private returns (bool) {
+        if (recipient == address(0)) {
+            emit IntentFailed(7, 0, "Invalid recipient address");
+            return false;
+        }
+
+        // Handle ETH transfers
+        if (token == address(0) || token == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+            try this.executeETHTransfer{value: amount}(recipient) {
+                emit TransferExecuted(address(0), msg.sender, recipient, amount);
+                emit IntentProcessed(7, 0, true);
+                return true;
+            } catch Error(string memory reason) {
+                emit IntentFailed(7, 0, reason);
+                return false;
+            } catch {
+                emit IntentFailed(7, 0, "ETH transfer failed");
+                return false;
+            }
+        }
+        
+        // Handle ERC20 transfers
+        // Mock ERC20 transfer
+        emit TransferExecuted(token, msg.sender, recipient, amount);
+        emit IntentProcessed(7, 0, true);
+        return true;
+    }
+
+    function executeETHTransfer(address recipient) external payable {
+        require(msg.sender == address(this), "Only self-call allowed");
+        (bool success,) = recipient.call{value: msg.value}("");
+        require(success, "ETH transfer failed");
+    }
+
+    // Add receive() to handle ETH transfers
+    receive() external payable {}
 
     // Getter functions for processed actions
     function getProcessedActionsCount() external view returns (uint256) {

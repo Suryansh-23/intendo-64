@@ -176,6 +176,31 @@ function App() {
         }
     };
 
+    const getEventDescription = (actionType: number, protocol: number, success: boolean): string => {
+        const actionName = mapActionTypeToName(actionType);
+        const protocolName = mapProtocolToName(protocol);
+
+        // Special handling for native ETH and token transfers
+        if (protocol === 0 && actionType === 7) {
+            return `${actionName} ${success ? "completed" : "failed"}`;
+        }
+
+        return `${actionName} on ${protocolName} ${success ? "completed" : "failed"}`;
+    };
+
+    const formatTransferLog = (message: string, address?: string): string => {
+        // Check if the message contains a transfer event
+        if (message.includes("Transfer")) {
+            // For ETH transfers (zero address), show "ETH" instead of the address
+            if (address === "0x0000000000000000000000000000000000000000") {
+                return message.replace("Transfer", "ETH Transfer");
+            }
+            // For token transfers, keep the original format
+            return message;
+        }
+        return message;
+    };
+
     // Watch for IntentProcessed events
     useWatchContractEvent({
         address: INTENDO_CONTRACT_ADDRESS,
@@ -195,14 +220,18 @@ function App() {
                 const protocol = Number(log.args.protocol);
                 const success = log.args.success;
 
-                const actionName = mapActionTypeToName(actionType);
-                const protocolName = mapProtocolToName(protocol);
+                let message = `${getEventDescription(actionType, protocol, success)}! Tx: ${log.transactionHash.slice(0, 6)}...${log.transactionHash.slice(-4)}`;
+                
+                // Format transfer messages specially
+                if (actionType === 7) {
+                    message = formatTransferLog(message);
+                }
 
                 setLogs((prev) => [
                     ...prev,
                     {
                         time,
-                        message: `${actionName} on ${protocolName} ${success ? "succeeded" : "failed"}! Tx: ${log.transactionHash.slice(0, 6)}...${log.transactionHash.slice(-4)}`,
+                        message,
                         type: success ? 'success' : 'error'
                     },
                 ]);
@@ -504,23 +533,33 @@ function App() {
             ]
         },
         {
-            title: "Bridge (Uniswap)",
-            icon: <Bridge className="w-6 h-6" />,
-            text: "add liquidity ETH USDC to Uniswap",
+            title: "Transfer",
+            icon: <Send className="w-6 h-6" />,
+            text: "transfer 1 ETH to 0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
             variations: [
-                "provide liquidity ETH/DAI",
-                "supply to ETH/USDC pool",
-                "add to liquidity pool"
+                "send 100 USDC to 0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+                "give 50 DAI to 0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+                "transfer 0.5 ETH to 0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
             ]
         },
         {
-            title: "Check Balance",
-            icon: <Coin className="w-6 h-6" />,
-            text: "check balance of ETH",
+            title: "Withdraw (Aave)",
+            icon: <Send className="w-6 h-6 -rotate-45" />,
+            text: "withdraw 500 USDC from Aave",
             variations: [
-                "show my USDC balance",
-                "view ETH balance",
-                "get DAI balance"
+                "take out 200 USDT from Aave",
+                "remove 100 DAI from lending pool",
+                "get 1 ETH from Aave"
+            ]
+        },
+        {
+            title: "Repay (Aave)",
+            icon: <Send className="w-6 h-6 -rotate-90" />,
+            text: "repay 500 USDC to Aave",
+            variations: [
+                "pay back 1000 USDT on Aave",
+                "return 100 DAI loan",
+                "settle 50 USDC debt"
             ]
         }
     ];
@@ -736,7 +775,7 @@ function App() {
                             </div>
 
                             {/* Suggestion Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                 {suggestions.map((suggestion, index) => (
                                     <div key={index} className="group relative">
                                         <button

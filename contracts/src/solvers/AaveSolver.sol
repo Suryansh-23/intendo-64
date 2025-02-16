@@ -11,9 +11,16 @@ contract AaveSolver is IProtocolSolver {
         uint8 rateMode
     );
 
-    event RepayExecuted(address indexed asset, uint256 amount, uint8 rateMode);
+    event RepayExecuted(
+        address indexed asset, 
+        uint256 amount, 
+        uint8 rateMode
+    );
 
-    event DepositExecuted(address indexed asset, uint256 amount);
+    event DepositExecuted(
+        address indexed asset, 
+        uint256 amount
+    );
 
     event WithdrawExecuted(
         address indexed asset,

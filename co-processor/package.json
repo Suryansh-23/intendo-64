@@ -10,8 +10,10 @@
     "viem": "^2.22.23"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20",
     "esbuild": "^0.19",
+    "mocha": "^11.1.0",
     "npm-run-all": "^4",
     "openapi-typescript": "^6",
     "ts-node": "^10",
@@ -23,7 +25,9 @@
     "build": "run-s codegen compile",
     "codegen": "ts-node schema.ts",
     "compile": "tsc && esbuild ./src/index.ts --bundle --outfile=dist/index.js --platform=node --target=node20",
-    "start": "ROLLUP_HTTP_SERVER_URL=\"http://127.0.0.1:5004\" tsx src/index.ts"
+    "start": "ROLLUP_HTTP_SERVER_URL=\"http://127.0.0.1:5004\" tsx src/index.ts",
+    "test": "mocha -r tsx 'test/**/*.test.ts'",
+    "test:watch": "mocha -r tsx 'test/**/*.test.ts' --watch --watch-files src/**/*.ts,test/**/*.ts"
   },
   "keywords": [
     "cartesi"

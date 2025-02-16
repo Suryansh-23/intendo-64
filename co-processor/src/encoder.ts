@@ -1,5 +1,5 @@
 import { encodeAbiParameters, getAddress, Hex, isAddress, parseUnits } from "viem";
-import { DeFiAction } from "./analyzer";
+import { ActionType, DeFiAction, Protocol } from "./analyzer";
 
 // Match Solidity struct exactly
 const INTENT_ABI = [
@@ -35,8 +35,15 @@ export class ActionEncoder {
 
     private validateAmount(amount: string): bigint {
         try {
-            return parseUnits(amount, 18); // Assuming 18 decimals
+            // Special handling for ETH amounts
+            const amountStr = amount.toString();
+            if (amountStr.includes('.')) {
+                return parseUnits(amountStr, 18);
+            } else {
+                return parseUnits(amountStr, 18);
+            }
         } catch (e) {
+            console.error("Amount validation error:", e);
             throw new Error(`Invalid amount: ${amount}`);
         }
     }
@@ -50,25 +57,44 @@ export class ActionEncoder {
 
     public encodeAction(action: DeFiAction): Hex {
         try {
+            // Protocol-specific token handling and validation
+            if (action.protocol === Protocol.GENERIC && action.actionType === ActionType.TRANSFER) {
+                // Validate transfer requirements
+                if (!action.params.recipient || action.params.recipient === "0x0000000000000000000000000000000000000000") {
+                    throw new Error("Transfer requires a valid recipient address");
+                }
+                if (!action.params.amount || action.params.amount === "0") {
+                    throw new Error("Transfer requires a valid amount");
+                }
+            }
+
             // Validate and format parameters
             const params = {
                 tokenIn: this.validateAddress(action.params.tokenIn),
                 tokenOut: this.validateAddress(action.params.tokenOut),
                 amount: this.validateAmount(action.params.amount),
-                recipient: this.validateAddress(action.params.recipient),
+                recipient: this.validateAddress(action.params.recipient || "0x0000000000000000000000000000000000000000"),
                 rateMode: action.params.rateMode,
                 slippage: this.validateSlippage(action.params.slippage),
-                poolId: this.validateAddress(action.params.poolId),
+                poolId: this.validateAddress(action.params.poolId || "0x0000000000000000000000000000000000000000"),
             };
 
-            // Encode as tuple to match Solidity struct (actionType, protocol, params)
+            // Add debug logging
+            console.log("Encoding action:", {
+                actionType: ActionType[action.actionType],
+                protocol: Protocol[action.protocol],
+                params: {
+                    ...params,
+                    amount: params.amount.toString()
+                }
+            });
+
             const abiValue: [number, number, typeof params] = [
                 action.actionType,
                 action.protocol,
                 params,
             ];
 
-            // Encode using the exact Solidity struct format
             return encodeAbiParameters(INTENT_ABI, abiValue);
         } catch (error) {
             console.error("Encoding error:", error);

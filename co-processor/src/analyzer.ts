@@ -73,9 +73,17 @@ class IntentAnalyzer {
         this.classifier.addDocument("convert eth to usdc", "swap");
         this.classifier.addDocument("trade eth for usdc", "swap");
 
-        // Reduce transfer training to avoid confusion
-        this.classifier.addDocument("transfer to address", "transfer");
-        this.classifier.addDocument("send to wallet", "transfer");
+        // Transfer-specific training with both ETH and token variations
+        this.classifier.addDocument("transfer eth to address", "transfer");
+        this.classifier.addDocument("send native eth to wallet", "transfer");
+        this.classifier.addDocument("give ether to address", "transfer");
+        this.classifier.addDocument("transfer tokens to 0x", "transfer");
+        this.classifier.addDocument("send usdc to wallet", "transfer");
+        this.classifier.addDocument("transfer 5 eth", "transfer");
+        this.classifier.addDocument("send 100 usdc", "transfer");
+        this.classifier.addDocument("give 10 eth", "transfer");
+        this.classifier.addDocument("transfer ether", "transfer");
+        this.classifier.addDocument("move eth", "transfer");
 
         // Other actions
         this.classifier.addDocument(
@@ -94,6 +102,16 @@ class IntentAnalyzer {
     private resolveTokenAddress(token: string | undefined): string {
         if (!token) return "0x0000000000000000000000000000000000000000";
 
+        // Special case for ETH in transfers (use zero address)
+        if (token.toUpperCase() === "ETH") {
+            const action = this.lastDeterminedAction;
+            if (action === "transfer") {
+                return "0x0000000000000000000000000000000000000000";
+            }
+            // For other actions (like swaps), use WETH
+            return TOKEN_ADDRESSES["ETH"] || "0x0000000000000000000000000000000000000000";
+        }
+
         // If it's already an address, return it normalized
         if (token.startsWith("0x") && token.length === 42) {
             return token.toLowerCase();
@@ -107,6 +125,8 @@ class IntentAnalyzer {
         );
     }
 
+    private lastDeterminedAction: string = "";
+
     private extractTokens(text: string): {
         token_in?: string | undefined;
         token_out?: string | undefined;
@@ -116,23 +136,20 @@ class IntentAnalyzer {
             token_out: undefined as string | undefined,
         };
 
-        // Match both token tickers and addresses
-        const tokenRegex = /(ETH|USDC|USDT|DAI|WBTC|0x[a-fA-F0-9]{40})/gi;
+        // Enhanced token pattern matching for input/output tokens
+        const tokenRegex = /(ETH(?:ER)?|NATIVE\s+ETH|USDC|USDT|DAI|WBTC|0x[a-fA-F0-9]{40})/gi;
         const matches = text.match(tokenRegex) || [];
 
-        // For lending operations, we typically only need token_in
-        const action = this.classifier.classify(text);
-        if (["borrow", "repay", "deposit", "withdraw"].includes(action)) {
-            tokens.token_in = matches[0]?.toUpperCase();
-            return tokens;
-        }
+        if (matches.length > 0) {
+            // First token is always input token
+            const firstToken = matches[0]?.toUpperCase();
+            tokens.token_in = firstToken?.includes('ETH') ? 'ETH' : firstToken;
 
-        // For swaps and other operations, handle both tokens
-        if (matches.length >= 2) {
-            tokens.token_in = matches[0]?.toUpperCase();
-            tokens.token_out = matches[1]?.toUpperCase();
-        } else if (matches.length === 1) {
-            tokens.token_in = matches[0].toUpperCase();
+            // For swap operations, look for output token after "for", "to", or "into"
+            if (matches.length > 1 && /(?:for|to|into)\s+\w+/i.test(text)) {
+                const secondToken = matches[1]?.toUpperCase();
+                tokens.token_out = secondToken?.includes('ETH') ? 'ETH' : secondToken;
+            }
         }
 
         return tokens;
@@ -162,17 +179,19 @@ class IntentAnalyzer {
 
     private determineProtocol(text: string): "uniswap" | "aave" | "generic" {
         const normalizedText = text.toLowerCase();
-        const action = this.classifier.classify(text);
+        const action = this.determineAction(text);
+
+        // If it's a transfer action, always use generic protocol
+        if (action === "transfer") {
+            return "generic";
+        }
 
         // If it's a lending action, default to Aave
         if (["borrow", "repay", "deposit"].includes(action)) {
             return "aave";
         }
 
-        if (
-            normalizedText.includes("uniswap") ||
-            (action === "swap" && !normalizedText.includes("aave"))
-        ) {
+        if (normalizedText.includes("uniswap") || action === "swap") {
             return "uniswap";
         }
 
@@ -192,33 +211,62 @@ class IntentAnalyzer {
     private determineAction(text: string): string {
         const normalizedText = text.toLowerCase();
 
-        // More precise pattern matching for swaps
+        // Enhanced patterns for deposit/supply actions
+        const supplyPatterns = [
+            /\bdeposit\b/i,
+            /\bsupply\b/i,
+            /\bprovide\b/i,
+            /\blend\s+\d+/i  // Only match "lend" when followed by amount
+        ];
+
+        if (supplyPatterns.some(pattern => pattern.test(normalizedText))) {
+            this.lastDeterminedAction = "deposit";
+            return "deposit";
+        }
+
+        // Enhanced patterns for withdraw actions
+        const withdrawPatterns = [
+            /\bwithdraw\b/i,
+            /\btake\s+out\b/i,
+            /\bremove\s+from\b/i,
+            /\bget\s+.*\s+from\b/i
+        ];
+
+        if (withdrawPatterns.some(pattern => pattern.test(normalizedText))) {
+            this.lastDeterminedAction = "withdraw";
+            return "withdraw";
+        }
+
+        // Enhanced transfer patterns
+        const transferPatterns = [
+            /\b(?:transfer|send|give)\s+(?:\d*\.?\d+)?\s*(?:eth(?:er)?|native\s+eth|usdc|usdt|dai|wbtc)\s+(?:to\s+)?(?:0x[a-fA-F0-9]{40})/i,
+            /\b(?:move|forward)\s+(?:\d*\.?\d+)?\s*(?:eth(?:er)?|native\s+eth|usdc|usdt|dai|wbtc)\s+(?:to\s+)?(?:0x[a-fA-F0-9]{40})/i,
+            /\b(?:transfer|send|give)\s+(?:to\s+)?(?:0x[a-fA-F0-9]{40})\s+(?:\d*\.?\d+)?\s*(?:eth(?:er)?|native\s+eth|usdc|usdt|dai|wbtc)/i
+        ];
+
+        if (transferPatterns.some((pattern) => pattern.test(normalizedText))) {
+            this.lastDeterminedAction = "transfer";
+            return "transfer";
+        }
+
+        // Check for swap patterns
         const swapPatterns = [
             /\bswap\b/i,
             /\bexchange\b/i,
             /\bconvert\b/i,
             /\btrade\b/i,
-            /\b\w+\s+for\s+\w+\b/i, // matches "ETH for USDC" pattern
+            /\b\w+\s+for\s+\w+\b/i,
         ];
 
-        // Check for swap patterns first
         if (swapPatterns.some((pattern) => pattern.test(normalizedText))) {
+            this.lastDeterminedAction = "swap";
             return "swap";
         }
 
-        // Check for transfer patterns
-        const transferPatterns = [
-            /\btransfer\s+to\b/i,
-            /\bsend\s+to\b/i,
-            /\bgive\s+to\b/i,
-        ];
-
-        if (transferPatterns.some((pattern) => pattern.test(normalizedText))) {
-            return "transfer";
-        }
-
         // Use classifier as fallback
-        return this.classifier.classify(normalizedText);
+        const result = this.classifier.classify(normalizedText);
+        this.lastDeterminedAction = result;
+        return result;
     }
 
     // Validation helpers
@@ -234,6 +282,9 @@ class IntentAnalyzer {
     }
 
     private convertToActionType(action: string): ActionType {
+        // Debug logging
+        console.log("Converting action type from:", action);
+
         const actionMap: { [key: string]: ActionType } = {
             swap: ActionType.SWAP,
             add_liquidity: ActionType.ADD_LIQUIDITY,
@@ -246,16 +297,25 @@ class IntentAnalyzer {
             approve: ActionType.APPROVE,
             check_balance: ActionType.CHECK_BALANCE,
         };
-        return actionMap[action] || ActionType.TRANSFER;
+
+        const actionType = actionMap[action];
+        if (actionType === undefined) {
+            console.warn(`Unknown action type: ${action}, defaulting to last known action`);
+            // If action is unknown, use the last determined action as fallback
+            return actionMap[this.lastDeterminedAction] || ActionType.TRANSFER;
+        }
+        return actionType;
     }
 
     private convertToProtocol(protocol: string): Protocol {
-        const protocolMap: { [key: string]: Protocol } = {
-            uniswap: Protocol.UNISWAP,
-            aave: Protocol.AAVE,
-            generic: Protocol.GENERIC,
-        };
-        return protocolMap[protocol] || Protocol.GENERIC;
+        switch (protocol.toLowerCase()) {
+            case "uniswap":
+                return Protocol.UNISWAP;
+            case "aave":
+                return Protocol.AAVE;
+            default:
+                return Protocol.GENERIC;
+        }
     }
 
     async analyzeMessage(userInput: string): Promise<DeFiAction> {
@@ -266,29 +326,24 @@ class IntentAnalyzer {
         const action = this.determineAction(userInput);
 
         // Debug logging
+        console.log("Raw user input:", userInput);
         console.log("Determined action:", action);
-        console.log("Action type:", this.convertToActionType(action));
-
-        const interest_rate_mode =
-            protocol === "aave"
-                ? this.extractInterestRateMode(userInput)
-                : undefined;
-        const recipient = this.extractRecipient(userInput);
+        const actionType = this.convertToActionType(action);
+        console.log("Converted action type:", ActionType[actionType]);
 
         return {
-            actionType: this.convertToActionType(action),
+            actionType,
             protocol: this.convertToProtocol(protocol),
             params: {
                 tokenIn: this.resolveTokenAddress(tokens.token_in),
                 tokenOut: this.resolveTokenAddress(tokens.token_out),
                 amount: amount || "0",
-                recipient: this.normalizeAddress(recipient),
-                rateMode:
-                    interest_rate_mode === "stable"
-                        ? InterestRateMode.STABLE
-                        : interest_rate_mode === "variable"
-                        ? InterestRateMode.VARIABLE
-                        : InterestRateMode.NONE,
+                recipient: this.normalizeAddress(tokens.token_out ? undefined : this.extractRecipient(userInput)),
+                rateMode: protocol === "aave" 
+                    ? (this.extractInterestRateMode(userInput) === "stable" 
+                        ? InterestRateMode.STABLE 
+                        : InterestRateMode.VARIABLE)
+                    : InterestRateMode.NONE,
                 slippage: (slippage || 0) * 10000, // Convert to basis points
                 poolId: "0x0000000000000000000000000000000000000000",
             },
