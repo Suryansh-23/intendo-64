@@ -12,7 +12,7 @@
 
 ## Overview
 
-**Intendo-64** is a unique DeFi interaction platform that combines the nostalgia of retro gaming with modern DeFi capabilities. It features a natural language interface that allows users to execute complex DeFi operations through natural language as text or voice commands.
+**Intendo-64** is a unique DeFi interaction platform that combines the nostalgia of retro gaming with modern DeFi capabilities. It features a natural language interface that allows users to execute complex DeFi operations through natural language as text or voice commands. It enhances the UX of the web3 ecosystem in a fun way while being on-chain & verifiable.
 
 ## Features
 
