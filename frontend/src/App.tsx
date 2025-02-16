@@ -19,6 +19,7 @@ import { Buffer } from 'buffer';
 import { useAccount, useConnect, useChainId } from 'wagmi';
 import { useWriteContract, useWatchContractEvent } from 'wagmi';
 import { INTENDO_ABI, INTENDO_CONTRACT_ADDRESS } from './config/contract';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
 interface LoadingScreenProps {
     progress: number;
@@ -109,17 +110,121 @@ interface LogEntry {
 function App() {
     const [intent, setIntent] = useState("");
     const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [isListening, setIsListening] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [progress, setProgress] = useState(0);
     const [loadingMessage, setLoadingMessage] = useState("Initializing...");
-    const recognitionRef = useRef<any>(null);
     const { address, isConnected } = useAccount();
     const { connect, connectors, isPending } = useConnect();
     const chainId = useChainId();
     const [shouldContinueLoading, setShouldContinueLoading] = useState(false);
     const [connectionComplete, setConnectionComplete] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    const {
+        transcript,
+        listening,
+        resetTranscript,
+        browserSupportsSpeechRecognition,
+        finalTranscript,
+        isMicrophoneAvailable
+    } = useSpeechRecognition({
+        clearTranscriptOnListen: true,
+        commands: []
+    });
+
+    useEffect(() => {
+        if (finalTranscript) {
+            setIntent(finalTranscript);
+            const audio = new Audio(
+                "https://assets.mixkit.co/active_storage/sfx/1997/1997-preview.mp3"
+            );
+            audio.volume = 0.2;
+            audio.play();
+        }
+    }, [finalTranscript]);
+
+    const isMobileBrowser = () => {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    };
+
+    const startListening = () => {
+        if (isMobileBrowser()) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
+            
+            setLogs((prev) => [
+                ...prev,
+                {
+                    time,
+                    message: "Voice recognition may not work properly on mobile browsers. For best results, use Chrome on desktop.",
+                    type: 'info'
+                },
+            ]);
+        }
+
+        if (!browserSupportsSpeechRecognition || !isMicrophoneAvailable) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
+            
+            setLogs((prev) => [
+                ...prev,
+                {
+                    time,
+                    message: !browserSupportsSpeechRecognition 
+                        ? "Error: Speech recognition is not supported in this browser. Please use Chrome."
+                        : "Error: Microphone access is required for speech recognition.",
+                    type: 'error'
+                },
+            ]);
+            return;
+        }
+
+        try {
+            resetTranscript();
+            SpeechRecognition.startListening({ 
+                continuous: false,
+                language: 'en-US'
+            });
+        } catch (error) {
+            handleSpeechError(error);
+        }
+    };
+
+    const handleSpeechError = (error: unknown) => {
+        const now = new Date();
+        const time = now.toLocaleTimeString("en-US", {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+        });
+        
+        setLogs((prev) => [
+            ...prev,
+            {
+                time,
+                message: `Failed to start speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                type: 'error'
+            },
+        ]);
+    };
+
+    // Stop listening when component unmounts
+    useEffect(() => {
+        return () => {
+            SpeechRecognition.stopListening();
+        };
+    }, []);
 
     const { writeContract, isPending: isExecuting } = useWriteContract();
 
@@ -396,91 +501,6 @@ function App() {
 
         return () => clearInterval(interval);
     }, [connectionComplete]);
-
-    const startListening = () => {
-        // Check if the browser supports speech recognition
-        if (!("SpeechRecognition" in window) && !("webkitSpeechRecognition" in window)) {
-            const now = new Date();
-            const time = now.toLocaleTimeString("en-US", {
-                hour12: false,
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-            });
-            
-            setLogs((prev) => [
-                ...prev,
-                {
-                    time,
-                    message: "Error: Speech recognition is not supported in this browser. Please use Chrome.",
-                    type: 'error'
-                },
-            ]);
-            return;
-        }
-
-        try {
-            const SpeechRecognitionAPI =
-                window.SpeechRecognition || window.webkitSpeechRecognition;
-            
-            // Clean up any existing instance
-            if (recognitionRef.current) {
-                recognitionRef.current.stop();
-            }
-
-            recognitionRef.current = new SpeechRecognitionAPI();
-            
-            // Configure recognition settings
-            recognitionRef.current.continuous = false;
-            recognitionRef.current.interimResults = false;
-            recognitionRef.current.lang = 'en-US';
-
-            recognitionRef.current.onstart = () => {
-                setIsListening(true);
-            };
-
-            recognitionRef.current.onresult = (event: any) => {
-                const transcript = event.results[0][0].transcript;
-                setIntent(transcript);
-                setIsListening(false);
-
-                const audio = new Audio(
-                    "https://assets.mixkit.co/active_storage/sfx/1997/1997-preview.mp3"
-                );
-                audio.volume = 0.2;
-                audio.play();
-            };
-
-            recognitionRef.current.onerror = (event: any) => {
-                console.log(`Speech recognition error: ${event.error}`);
-                setIsListening(false);
-            };
-
-            recognitionRef.current.onend = () => {
-                setIsListening(false);
-            };
-
-            recognitionRef.current.start();
-        } catch (error) {
-            const now = new Date();
-            const time = now.toLocaleTimeString("en-US", {
-                hour12: false,
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-            });
-            
-            setLogs((prev) => [
-                ...prev,
-                {
-                    time,
-                    message: `Failed to start speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                    type: 'error'
-                },
-            ]);
-            setIsListening(false);
-        }
-    };
 
     const handleFireIntent = () => {
         if (!isConnected) {
@@ -789,15 +809,22 @@ function App() {
                         <div className="space-y-10">
                             <div className="bg-[#e52521] p-10 pixel-corners question-block-border">
                                 <div className="relative flex items-center gap-4">
-                                    <button
-                                        onClick={startListening}
-                                        disabled={!isConnected}
-                                        className={`p-4 rounded-full transition-all mic-button ${
-                                            isListening ? "recording" : ""
-                                        } ${!isConnected ? "opacity-50 cursor-not-allowed" : ""}`}
-                                    >
-                                        <Mic className="w-6 h-6" />
-                                    </button>
+                                    <div className="relative">
+                                        <button
+                                            onClick={startListening}
+                                            disabled={!isConnected}
+                                            className={`p-4 rounded-full transition-all mic-button ${
+                                                listening ? "recording" : ""
+                                            } ${!isConnected ? "opacity-50 cursor-not-allowed" : ""}`}
+                                        >
+                                            <Mic className="w-6 h-6" />
+                                        </button>
+                                        {listening && (
+                                            <div className="absolute -top-1 -right-1 text-xs px-2 py-1 bg-[#50fa7b] text-[#1a0f2e] rounded-full pixel-corners animate-pulse">
+                                                Listening...
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="flex-1 relative">
                                         <input
                                             type="text"
@@ -875,7 +902,8 @@ function App() {
                                 {logs
                                     .filter(log => !log.message.includes('Speech recognition') && 
                                                  !log.message.includes('Listening...') && 
-                                                 !log.message.includes('No speech was detected'))
+                                                 !log.message.includes('No speech was detected') &&
+                                                 !log.message.includes('Microphone access'))
                                     .map((log, index) => (
                                     <div
                                         key={index}
