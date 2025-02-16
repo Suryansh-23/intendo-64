@@ -1,0 +1,286 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.mario-gradient {
+    background: linear-gradient(
+        180deg,
+        #87ceeb 0%,
+        #5c94fc 40%,
+        transparent 100%
+    );
+}
+
+.ground-background {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 500px; /* Increased from 300px to 500px */
+    background-image: url("/ground.svg");
+    background-repeat: repeat-x;
+    background-position: bottom;
+    background-size: 600px auto; /* Set explicit width while maintaining aspect ratio */
+    z-index: 1;
+}
+
+.parallax-background {
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.2) 0%, transparent 20%),
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(255, 255, 255, 0.1) 3px,
+            rgba(255, 255, 255, 0.1) 3px
+        );
+    animation: parallax 20s linear infinite;
+}
+
+@keyframes parallax {
+    from {
+        background-position-y: 0;
+    }
+    to {
+        background-position-y: 100%;
+    }
+}
+
+.platform {
+    position: absolute;
+    width: 120px;
+    height: 24px;
+    background: #8b1810;
+    border-top: 4px solid #e52521;
+    border-left: 4px solid #e52521;
+    border-right: 4px solid #b52010;
+    border-bottom: 4px solid #b52010;
+    transform: perspective(500px) rotateX(30deg);
+    animation: float-platform 3s ease-in-out infinite;
+}
+
+@keyframes float-platform {
+    0%,
+    100% {
+        transform: perspective(500px) rotateX(30deg) translateY(0);
+    }
+    50% {
+        transform: perspective(500px) rotateX(30deg) translateY(-10px);
+    }
+}
+
+.question-block {
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.question-block:hover {
+    transform: translateY(-4px) scale(1.02);
+    animation: bounce 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes bounce {
+    0%,
+    100% {
+        transform: translateY(-4px) scale(1.02);
+    }
+    50% {
+        transform: translateY(-8px) scale(1.05);
+    }
+}
+
+.cloud {
+    position: absolute;
+    width: 300px;
+    height: 150px;
+    opacity: 0.6;
+    pointer-events: none;
+    background-color: #f7f5ea;
+    mask-image: url("/clouds.svg#cloud1");
+    -webkit-mask-image: url("/clouds.svg#cloud1");
+    mask-size: contain;
+    -webkit-mask-size: contain;
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    animation: float 30s linear infinite;
+}
+
+.cloud:nth-child(2) {
+    mask-image: url("/clouds.svg#cloud2");
+    -webkit-mask-image: url("/clouds.svg#cloud2");
+    animation-duration: 25s;
+}
+
+.cloud:nth-child(3) {
+    mask-image: url("/clouds.svg#cloud3");
+    -webkit-mask-image: url("/clouds.svg#cloud3");
+    animation-duration: 35s;
+}
+
+@keyframes float {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100vw);
+    }
+}
+
+.scanline {
+    background: linear-gradient(
+        to bottom,
+        transparent 50%,
+        rgba(0, 0, 0, 0.1) 50%
+    );
+    background-size: 100% 4px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    animation: scanline 10s linear infinite;
+}
+
+@keyframes scanline {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: 0 100%;
+    }
+}
+
+.pixel-corners {
+    clip-path: polygon(
+        0 6px,
+        6px 6px,
+        6px 0,
+        calc(100% - 6px) 0,
+        calc(100% - 6px) 6px,
+        100% 6px,
+        100% calc(100% - 6px),
+        calc(100% - 6px) calc(100% - 6px),
+        calc(100% - 6px) 100%,
+        6px 100%,
+        6px calc(100% - 6px),
+        0 calc(100% - 6px)
+    );
+}
+
+.mario-border {
+    box-shadow: 0 0 0 4px #e52521, 6px 6px 0 4px #fbd000,
+        0 0 20px rgba(229, 37, 33, 0.2);
+}
+
+.question-block-border {
+    background: #fbd000;
+    box-shadow: 0 0 0 4px #e52521, 6px 6px 0 4px #b52010,
+        inset 0 0 0 2px #fff6d5, inset 6px 6px 0 2px #e5bc00,
+        0 0 20px rgba(251, 208, 0, 0.3);
+}
+
+.fire-button {
+    background: #e52521;
+    box-shadow: 0 0 0 2px #b52010, 3px 3px 0 2px #8b1810,
+        0 0 20px rgba(255, 59, 59, 0.4);
+    text-shadow: 2px 2px 0 #8b1810;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fire-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 2px #b52010, 3px 5px 0 2px #8b1810,
+        0 0 25px rgba(255, 59, 59, 0.5);
+}
+
+.mic-button {
+    background: #1a0f2e;
+    color: #fbd000;
+    box-shadow: 0 0 0 2px #b52010, 3px 3px 0 2px #8b1810,
+        0 0 15px rgba(251, 208, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mic-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 2px #b52010, 3px 5px 0 2px #8b1810,
+        0 0 20px rgba(251, 208, 0, 0.4);
+}
+
+.mic-button.recording {
+    background: #50fa7b;
+    color: #1a0f2e;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(80, 250, 123, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(80, 250, 123, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(80, 250, 123, 0);
+    }
+}
+
+@keyframes coin-spin {
+    0% {
+        transform: scaleX(1);
+    }
+    50% {
+        transform: scaleX(0.1);
+    }
+    100% {
+        transform: scaleX(1);
+    }
+}
+
+.coin-spin {
+    animation: coin-spin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.terminal-mario {
+    background: #000810;
+    color: #fbd000;
+    text-shadow: 0 0 8px rgba(251, 208, 0, 0.4);
+    border: 4px solid #1a0f2e;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #fbd000, #e52521, #fbd000);
+    background-size: 200% 100%;
+    animation: progress-gradient 2s linear infinite;
+}
+
+@keyframes progress-gradient {
+    0% {
+        background-position: 100% 0;
+    }
+    100% {
+        background-position: -100% 0;
+    }
+}
+
+/* Custom Scrollbar */
+.terminal-mario::-webkit-scrollbar {
+    width: 12px;
+}
+
+.terminal-mario::-webkit-scrollbar-track {
+    background: #1a0f2e;
+    border: 2px solid #e52521;
+}
+
+.terminal-mario::-webkit-scrollbar-thumb {
+    background: #fbd000;
+    border: 2px solid #e52521;
+    border-radius: 0;
+}
+
+.terminal-mario::-webkit-scrollbar-thumb:hover {
+    background: #e5bc00;
+}
+
