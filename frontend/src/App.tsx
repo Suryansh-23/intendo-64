@@ -7,7 +7,6 @@ declare global {
 
 import {
     ArrowRightLeft,
-    Grid as Bridge,
     Coins as Coin,
     Mic,
     PiggyBank,
@@ -218,7 +217,7 @@ function App() {
             logs.forEach(log => {
                 const actionType = Number(log.args.actionType);
                 const protocol = Number(log.args.protocol);
-                const success = log.args.success;
+                const success = log.args.success ?? false;
 
                 let message = `${getEventDescription(actionType, protocol, success)}! Tx: ${log.transactionHash.slice(0, 6)}...${log.transactionHash.slice(-4)}`;
                 
@@ -399,12 +398,46 @@ function App() {
     }, [connectionComplete]);
 
     const startListening = () => {
-        if ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) {
-            const SpeechRecognitionAPI = 
-                (window as any).SpeechRecognition || 
-                (window as any).webkitSpeechRecognition;
+        // Check if the browser supports speech recognition
+        if (!("SpeechRecognition" in window) && !("webkitSpeechRecognition" in window)) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
             
+            setLogs((prev) => [
+                ...prev,
+                {
+                    time,
+                    message: "Error: Speech recognition is not supported in this browser. Please use Chrome.",
+                    type: 'error'
+                },
+            ]);
+            return;
+        }
+
+        try {
+            const SpeechRecognitionAPI =
+                window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            // Clean up any existing instance
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
+
             recognitionRef.current = new SpeechRecognitionAPI();
+            
+            // Configure recognition settings
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = false;
+            recognitionRef.current.lang = 'en-US';
+
+            recognitionRef.current.onstart = () => {
+                setIsListening(true);
+            };
 
             recognitionRef.current.onresult = (event: any) => {
                 const transcript = event.results[0][0].transcript;
@@ -418,12 +451,34 @@ function App() {
                 audio.play();
             };
 
+            recognitionRef.current.onerror = (event: any) => {
+                console.log(`Speech recognition error: ${event.error}`);
+                setIsListening(false);
+            };
+
             recognitionRef.current.onend = () => {
                 setIsListening(false);
             };
 
             recognitionRef.current.start();
-            setIsListening(true);
+        } catch (error) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
+            
+            setLogs((prev) => [
+                ...prev,
+                {
+                    time,
+                    message: `Failed to start speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    type: 'error'
+                },
+            ]);
+            setIsListening(false);
         }
     };
 
@@ -689,10 +744,10 @@ function App() {
                     ></div>
 
                     {/* Header */}
-                    <header className="p-8 flex justify-between items-center border-b-[6px] border-[#e52521] relative z-10">
+                    <header className="p-8 flex justify-between items-center border-b-[6px] border-[#e52521] bg-gradient-to-b from-[#1a0f2e]/95 to-[#1a0f2e]/85 backdrop-blur-sm relative z-10 shadow-lg">
                         <div className="flex items-center gap-6">
                             <img src="/icon.png" alt="Icon" className="w-12 h-12" />
-                            <h1 className="text-2xl text-[#fbd000] drop-shadow-[2px_2px_0_#e52521]">
+                            <h1 className="text-4xl text-[#fbd000] drop-shadow-[2px_2px_0_#e52521] font-bold">
                                 INTENDO-64
                             </h1>
                         </div>
@@ -790,7 +845,7 @@ function App() {
                                                     {suggestion.title}
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-[#b52010]">{suggestion.text}</p>
+                                            <p className="text-md text-[#b52010]">{suggestion.text}</p>
                                         </button>
                                         {/* Tooltip with variations */}
                                         <div className="absolute left-0 w-full p-4 bg-black/90 rounded-lg invisible group-hover:visible transition-all duration-200 z-20 mt-2 pixel-corners">
@@ -817,7 +872,11 @@ function App() {
                                 ACTIVITY LOG
                             </h2>
                             <div className="terminal-mario p-8 pixel-corners mario-border h-72 overflow-y-auto space-y-4">
-                                {logs.map((log, index) => (
+                                {logs
+                                    .filter(log => !log.message.includes('Speech recognition') && 
+                                                 !log.message.includes('Listening...') && 
+                                                 !log.message.includes('No speech was detected'))
+                                    .map((log, index) => (
                                     <div
                                         key={index}
                                         className="text-sm flex gap-6 items-center coin-spin"
