@@ -12,12 +12,14 @@ import {
     Mic,
     PiggyBank,
     Power,
-    RotateCcw,
     Send,
     X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Buffer } from 'buffer';
 import { useAccount, useConnect, useChainId } from 'wagmi';
+import { useWriteContract, useWatchContractEvent } from 'wagmi';
+import { INTENDO_ABI, INTENDO_CONTRACT_ADDRESS } from './config/contract';
 
 interface LoadingScreenProps {
     progress: number;
@@ -99,9 +101,15 @@ function LoadingScreen({ progress, message, onConnectionComplete }: LoadingScree
     );
 }
 
+interface LogEntry {
+    time: string;
+    message: string;
+    type: 'submit' | 'success' | 'error' | 'info';
+}
+
 function App() {
     const [intent, setIntent] = useState("");
-    const [logs, setLogs] = useState<{ time: string; message: string }[]>([]);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
     const [isListening, setIsListening] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [progress, setProgress] = useState(0);
@@ -112,6 +120,143 @@ function App() {
     const chainId = useChainId();
     const [shouldContinueLoading, setShouldContinueLoading] = useState(false);
     const [connectionComplete, setConnectionComplete] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const { writeContract, isPending: isExecuting } = useWriteContract();
+
+    // Watch for ExecutionInitiated events
+    useWatchContractEvent({
+        address: INTENDO_CONTRACT_ADDRESS,
+        abi: INTENDO_ABI,
+        eventName: 'ExecutionInitiated',
+        onLogs(logs) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
+
+            logs.forEach(log => {
+                setLogs((prev) => [
+                    ...prev,
+                    {
+                        time,
+                        message: `Intent submitted! Tx: ${log.transactionHash.slice(0, 6)}...${log.transactionHash.slice(-4)}`,
+                        type: 'submit'
+                    },
+                ]);
+            });
+        },
+    });
+
+    const mapActionTypeToName = (actionType: number): string => {
+        switch(actionType) {
+            case 0: return "Swap";
+            case 1: return "Add Liquidity";
+            case 2: return "Remove Liquidity";
+            case 3: return "Borrow";
+            case 4: return "Repay";
+            case 5: return "Deposit";
+            case 6: return "Withdraw";
+            case 7: return "Transfer";
+            case 8: return "Approve";
+            case 9: return "Check Balance";
+            default: return "Unknown";
+        }
+    };
+
+    const mapProtocolToName = (protocol: number): string => {
+        switch(protocol) {
+            case 0: return "Generic";
+            case 1: return "Uniswap";
+            case 2: return "Aave";
+            default: return "Unknown";
+        }
+    };
+
+    // Watch for IntentProcessed events
+    useWatchContractEvent({
+        address: INTENDO_CONTRACT_ADDRESS,
+        abi: INTENDO_ABI,
+        eventName: 'IntentProcessed',
+        onLogs(logs) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
+
+            logs.forEach(log => {
+                const actionType = Number(log.args.actionType);
+                const protocol = Number(log.args.protocol);
+                const success = log.args.success;
+
+                const actionName = mapActionTypeToName(actionType);
+                const protocolName = mapProtocolToName(protocol);
+
+                setLogs((prev) => [
+                    ...prev,
+                    {
+                        time,
+                        message: `${actionName} on ${protocolName} ${success ? "succeeded" : "failed"}! Tx: ${log.transactionHash.slice(0, 6)}...${log.transactionHash.slice(-4)}`,
+                        type: success ? 'success' : 'error'
+                    },
+                ]);
+
+                if (success) {
+                    const audio = new Audio(
+                        "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3"
+                    );
+                    audio.volume = 0.2;
+                    audio.play();
+                }
+            });
+        },
+    });
+
+    // Watch for IntentFailed events
+    useWatchContractEvent({
+        address: INTENDO_CONTRACT_ADDRESS,
+        abi: INTENDO_ABI,
+        eventName: 'IntentFailed',
+        onLogs(logs) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
+
+            logs.forEach(log => {
+                const actionType = Number(log.args.actionType);
+                const protocol = Number(log.args.protocol);
+                const reason = log.args.reason;
+
+                const actionName = mapActionTypeToName(actionType);
+                const protocolName = mapProtocolToName(protocol);
+
+                setLogs((prev) => [
+                    ...prev,
+                    {
+                        time,
+                        message: `${actionName} on ${protocolName} failed: ${reason}`,
+                        type: 'error'
+                    },
+                ]);
+
+                const audio = new Audio(
+                    "https://assets.mixkit.co/active_storage/sfx/1997/1997-preview.mp3"
+                );
+                audio.volume = 0.2;
+                audio.play();
+            });
+        },
+    });
 
     const handleConnectionComplete = () => {
         setConnectionComplete(true);
@@ -268,61 +413,116 @@ function App() {
                 {
                     time,
                     message: "Error: Please connect your wallet first!",
+                    type: 'error'
                 },
             ]);
             return;
         }
 
-        const now = new Date();
-        const time = now.toLocaleTimeString("en-US", {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-        });
+        try {
+            // Convert the intent string to bytes
+            const inputBytes = new TextEncoder().encode(intent);
+            writeContract({
+                address: INTENDO_CONTRACT_ADDRESS,
+                abi: INTENDO_ABI,
+                functionName: 'runExecution',
+                args: [`0x${Buffer.from(inputBytes).toString('hex')}`],
+            });
 
-        setLogs((prev) => [
-            ...prev,
-            {
-                time,
-                message: `Intent fired: ${intent}`,
-            },
-        ]);
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
 
-        const audio = new Audio(
-            "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3"
-        );
-        audio.volume = 0.2;
-        audio.play();
+            setLogs((prev) => [
+                ...prev,
+                {
+                    time,
+                    message: `Processing intent: ${intent}`,
+                    type: 'info'
+                },
+            ]);
+        } catch (error) {
+            const now = new Date();
+            const time = now.toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            });
+
+            setLogs((prev) => [
+                ...prev,
+                {
+                    time,
+                    message: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+                    type: 'error'
+                },
+            ]);
+        }
     };
 
+    const handleSuggestionClick = (text: string) => {
+        setIsProcessing(true);
+        setIntent(text);
+        // Add small delay to show processing animation
+        setTimeout(() => setIsProcessing(false), 500);
+    };
 
     const suggestions = [
         {
-            title: "Swap",
+            title: "Swap (Uniswap)",
             icon: <ArrowRightLeft className="w-6 h-6" />,
-            text: "Swap 10 USDC to WMATIC",
+            text: "swap 5 ETH for USDC on Uniswap with 0.5% slippage",
+            variations: [
+                "exchange 10 ETH for USDT",
+                "convert 2 ETH to DAI",
+                "trade 1 ETH for WBTC"
+            ]
         },
         {
-            title: "Send",
-            icon: <Send className="w-6 h-6" />,
-            text: "Send 5 ETH to wallet",
-        },
-        {
-            title: "Bridge",
-            icon: <Bridge className="w-6 h-6" />,
-            text: "Bridge 100 USDC to Arbitrum",
-        },
-        {
-            title: "Borrow",
+            title: "Borrow (Aave)",
             icon: <PiggyBank className="w-6 h-6" />,
-            text: "Borrow 1000 USDC from Aave",
+            text: "borrow 1000 USDC from Aave with variable rate",
+            variations: [
+                "take a loan of 500 USDT on Aave",
+                "borrow 100 DAI with stable rate",
+                "lend me 50 USDC from Aave"
+            ]
         },
         {
-            title: "Repay",
-            icon: <RotateCcw className="w-6 h-6" />,
-            text: "Repay 500 USDC to Aave",
+            title: "Supply (Aave)",
+            icon: <Send className="w-6 h-6 rotate-90" />,
+            text: "deposit 2 ETH into Aave",
+            variations: [
+                "supply 1000 USDC to Aave",
+                "provide 500 DAI to lending pool",
+                "lend 5 ETH on Aave"
+            ]
         },
+        {
+            title: "Bridge (Uniswap)",
+            icon: <Bridge className="w-6 h-6" />,
+            text: "add liquidity ETH USDC to Uniswap",
+            variations: [
+                "provide liquidity ETH/DAI",
+                "supply to ETH/USDC pool",
+                "add to liquidity pool"
+            ]
+        },
+        {
+            title: "Check Balance",
+            icon: <Coin className="w-6 h-6" />,
+            text: "check balance of ETH",
+            variations: [
+                "show my USDC balance",
+                "view ETH balance",
+                "get DAI balance"
+            ]
+        }
     ];
 
     return (
@@ -524,13 +724,13 @@ function App() {
                                     </div>
                                     <button
                                         onClick={handleFireIntent}
-                                        disabled={!isConnected}
+                                        disabled={!isConnected || isExecuting}
                                         className={`fire-button px-8 py-6 pixel-corners hover:brightness-110 transition-all text-lg uppercase tracking-wider flex items-center gap-3 ${
-                                            !isConnected ? "opacity-50 cursor-not-allowed" : ""
+                                            !isConnected || isExecuting ? "opacity-50 cursor-not-allowed" : ""
                                         }`}
                                     >
                                         <Power className="w-5 h-5" />
-                                        Fire!
+                                        {isExecuting ? "Firing..." : "Fire!"}
                                     </button>
                                 </div>
                             </div>
@@ -538,19 +738,35 @@ function App() {
                             {/* Suggestion Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                 {suggestions.map((suggestion, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => setIntent(suggestion.text)}
-                                        className="question-block bg-[#fbd000] p-8 pixel-corners question-block-border hover:scale-105 transition-transform"
-                                    >
-                                        <div className="flex items-center gap-4 mb-6">
-                                            <div className="text-[#e52521]">{suggestion.icon}</div>
-                                            <span className="text-lg text-[#e52521]">
-                                                {suggestion.title}
-                                            </span>
+                                    <div key={index} className="group relative">
+                                        <button
+                                            onClick={() => handleSuggestionClick(suggestion.text)}
+                                            className={`w-full question-block bg-[#fbd000] p-8 pixel-corners question-block-border hover:scale-105 transition-transform ${
+                                                isProcessing ? 'animate-pulse' : ''
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-4 mb-6">
+                                                <div className="text-[#e52521]">{suggestion.icon}</div>
+                                                <span className="text-lg text-[#e52521]">
+                                                    {suggestion.title}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-[#b52010]">{suggestion.text}</p>
+                                        </button>
+                                        {/* Tooltip with variations */}
+                                        <div className="absolute left-0 w-full p-4 bg-black/90 rounded-lg invisible group-hover:visible transition-all duration-200 z-20 mt-2 pixel-corners">
+                                            <p className="text-[#fbd000] text-xs mb-2">Try saying:</p>
+                                            {suggestion.variations.map((variation, i) => (
+                                                <p 
+                                                    key={i} 
+                                                    className="text-white/80 text-sm cursor-pointer hover:text-[#fbd000] transition-colors mb-1"
+                                                    onClick={() => handleSuggestionClick(variation)}
+                                                >
+                                                    "{variation}"
+                                                </p>
+                                            ))}
                                         </div>
-                                        <p className="text-sm text-[#b52010]">{suggestion.text}</p>
-                                    </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -568,8 +784,18 @@ function App() {
                                         className="text-sm flex gap-6 items-center coin-spin"
                                     >
                                         <span className="text-[#fbd000]">{log.time}</span>
-                                        <Coin className="w-4 h-4 text-[#fbd000]" />
-                                        <span className="text-white">{log.message}</span>
+                                        <Coin className={`w-4 h-4 ${
+                                            log.type === 'success' ? 'text-green-400' :
+                                            log.type === 'error' ? 'text-red-400' :
+                                            log.type === 'submit' ? 'text-blue-400' :
+                                            'text-[#fbd000]'
+                                        }`} />
+                                        <span className={`${
+                                            log.type === 'success' ? 'text-green-400' :
+                                            log.type === 'error' ? 'text-red-400' :
+                                            log.type === 'submit' ? 'text-blue-400' :
+                                            'text-white'
+                                        }`}>{log.message}</span>
                                     </div>
                                 ))}
                                 {logs.length === 0 && (
